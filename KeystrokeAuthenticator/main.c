@@ -88,6 +88,7 @@ ISR(INT0_vect)
 		decodeKeys(keyboardData);
 		bitCount = 11;
 	}
+	return;
 	//eeprom_write_byte(eepromStart++, (unsigned char)(DDRC));
 	//eeprom_write_byte(eepromStart++, (unsigned char)(DDRD));
 	//eeprom_write_byte(eepromStart++, (unsigned char)(SREG));
@@ -108,7 +109,7 @@ int main(void)
 	init_keyboard();
 
 	while (1){
-		if((PIND & (1 << DDD2)) == 1){
+		if((PIND & (1 << PIND2)) == 1){
 			eeprom_write_byte(eepromStart++, 0xaa);	
 		}
 	}
