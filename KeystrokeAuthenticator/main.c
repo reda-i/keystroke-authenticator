@@ -4,138 +4,116 @@
 * Created: 2018-11-04 8:26:29 PM
 * Author : Army-O
 */
-
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#define F_CPU 1000000UL
+#include <util/delay.h>
+#include <avr/eeprom.h>
 #include <math.h>
+#define KEYBOARD_PIN_NAME PINC
+#define KEYBORD_PIN_NUM 0
+#define INPUT_CHAR_SIZE 30
+unsigned char* eepromStart = 0x5;
+unsigned char keyboardData = 0; // the keyboard code being received
+unsigned char bitCount = 11; // The number of the bit coming from the keyboard
+unsigned char inputChars [INPUT_CHAR_SIZE]; // A buffer holding the input keys from the keyboard
+int inputCharsHead = 0; // counting the index of the next character to leave the buffer
+int inputCharsTail = 0; // counting the index of the next character to get into the buffer
 
-unsigned long timerOverflowHolder = 0;
+/*A function that adds a key to the buffer*/
+void addKeyToBuffer(char key){
+	inputChars[inputCharsTail++] = key;
+	if(inputCharsTail >= INPUT_CHAR_SIZE){  // once you pass the buffer size, reset the index to 0
+		inputCharsTail = 0;
+	}
+}
 
-/*
-* This array holds the value of the timer when each key is pressed.
-* Location 0 holds the time for pressing "."
-* Location 9 holds the time for pressing "l"
-* The second dimension of the array is for the 5 trials.
-* For example, userKeyTimestamps[0][0] corresponds to the timestamp for "." in trial 1.
-*/
-unsigned long userKeyTimestamps[10][5];
 
-/*
-* These two arrays hold the final vector for the two users.
-*/
-double userAVector[9];
-double userBVector[9];
+char getChar(){
+	while(inputCharsHead == inputCharsTail);	
+	char key = inputChars[inputCharsHead];
+	if(inputCharsHead >= INPUT_CHAR_SIZE){  // once you pass the buffer size, reset the index to 0
+		inputCharsHead = 0;
+	}
+	return key;
+}
 
-/*
-* Configures the 16-bit timer 1 to work in mode 0
-* Enables interrupts for overflow consideration
-*/
-void configureTimer() {
-	
-	// set the timer to normal mode by clearing all WGM10 to WGM13
-	TCCR1A &= ~(1<<WGM10) & ~(1<<WGM11) & ~(1<<WGM12) & ~(1<<WGM13) ;
-
-	// enable interrupt on timer 1 overflow
-	TIMSK = (1 << TOIE1);
-	
-	// enable global interrupt
+/* Keyboard config and functions */
+void init_keyboard(){
+	MCUCR |= (1 << ISC01);// set MCUCR to 2 to accept requests coming from INT0 on the falling edge 
+	DDRC = 0x00;
+	DDRD = 0xfb;
+	PORTD = 0x00;	
+	GICR |= (1 << INT0);
 	sei();
 }
 
-/*
-* Stops the timer.
-* The timer needs to be restarted again by a call to startTimer.
-*/
-void stopTimer() {
-	
-	// stop the timer by clearing CS10 and CS12
-	TCCR1B &= ~(1<<CS10) & ~(1<<CS12);
-	
-}
 
-/*
-* Resets timer and starts it from zero
-* by setting the frequency to freq
-*/
-void startTimer() {
-	
-	// clear the timer contents
-	TCNT1 = 0;
-	timerOverflowHolder = 0;
-	
-	// set timer clock frequency to freq and start
-	TCCR1B |= (1<<CS10);
-	TCCR1B &= ~(1<<CS11);
-	TCCR1B &= ~(1<<CS12);
-	
-}
-
-/*
-* On overflow, increment the overflow count
-*/
-ISR (TIMER1_OVF_vect) {
-	timerOverflowHolder++;
-}
-
-/* Calculates the euclidean distance
-* between the test vector and the stored user vector
-*/
-double euclideanDistance(double testSubject[], double user[]) {
-	double sum = 0.0;
-	
-	for( int i = 0; i < 10; i++){
-		sum += pow((testSubject[i] - user[i]), 2.0);
-	}
-	
-	return sqrt(sum);
-}
-
-/*
-* Pass 'A' for user A and pass 'B' for user B
-* Call this method after all five trials for a particular user are complete.
-*/
-void calculateUserVector(char user) {
-	
-	unsigned long differencesVector[9][5];
-	
-	// calculate user differences vector
-	for(int i=0; i < 9; i++){ // iterate over timestamps
-		for(int j=0; j<5;j++){ // iterate over trials
-			differencesVector[i][j] = userKeyTimestamps[i+1][j] - userKeyTimestamps[i][j]; // calculate difference
-		}
-	}
-	
-	// average the differences and store the values
-	for(int i = 0; i<9; i++) { // iterate over differences
-		
-		unsigned long sum = 0;
-		
-		for(int j=0; j<5; j++){ // iterate over trials
-			sum+=differencesVector[i][j];
-		}
-		
-		double averageDifference = sum / 5.0;
-		
-		// store the average of the trials as a feature
-		if(user == 'A'){
-			userAVector[i] = averageDifference;
-		}
-		else{
-			userBVector[i] = averageDifference;
-		}
+void decodeKeys(unsigned char data){
+	PORTD |= (1 << PORTD5);
+	_delay_ms(10000);
+	PORTD &= (0xff ^ (1 << PORTD5));
+	switch(data){
+		case 0x49: addKeyToBuffer('.'); break; // char is "."
+		case 0x2c: addKeyToBuffer('t'); break; // char is "t"
+		case 0x42: addKeyToBuffer('i'); break; // char is "i"
+		case 0x24: addKeyToBuffer('e'); break; // char is "e"
+		case 0x73: addKeyToBuffer('5'); break; // char is "5"
+		case 0x2d: addKeyToBuffer('r'); break; // char is "r"
+		case 0x44: addKeyToBuffer('o'); break; // char is "o"
+		case 0x31: addKeyToBuffer('n'); break; // char is "n"
+		case 0x1c: addKeyToBuffer('a'); break; // char is "a"
+		case 0x4b: addKeyToBuffer('l'); break; // char is "l"
+		default:   addKeyToBuffer('0'); break; // add null character to buffer in order to discard it and reset the trial
 	}
 }
 
+/*	
+interrupt service routine for handling the keyboard input on INT0
+INT0 will be connected to the keyboard cl
+*/
 
+ISR(INT0_vect)
+{
+	//eeprom_write_byte(eepromStart++, (unsigned char)bitCount);
+	//eeprom_write_byte(eepromStart++, (unsigned char)(KEYBOARD_PIN_NAME & (1 << KEYBORD_PIN_NUM)));
+	PORTD |= (1 << PORTD6);
+	_delay_ms(1000);
+	PORTD &= (0xff ^ (1 << PORTD6));
+	_delay_ms(1000);
+	if(bitCount < 11 && bitCount > 2) //intercept data bits
+	{
+		keyboardData = (keyboardData >> 1); // empty a space for the next data bit in keyboard data
+		if(KEYBOARD_PIN_NAME & (1 << KEYBORD_PIN_NUM)){ //if the keyboard input is a 1, store a 1 in the empty space
+			keyboardData |= 0x80; // set the most significant bit in keyboardData to 1 
+		}
+	}
+	if(--bitCount == 0){
+		decodeKeys(keyboardData);
+		bitCount = 11;
+	}
+	GIFR = 0xff;
+	//eeprom_write_byte(eepromStart++, (unsigned char)(SREG));
+	//eeprom_write_byte(eepromStart++, (unsigned char)(GICR));
+	//eeprom_write_byte(eepromStart++, (unsigned char)(GIFR));
+	//eeprom_write_byte(eepromStart++, (unsigned char)(MCUCR));
+	//eeprom_write_byte(eepromStart++, (unsigned char)(MCUCSR));
+}
+
+/* LED config and functions*/
+void init_LED(){
+	//TODO: set output ports config for the LEDs
+}
 
 
 int main(void)
 {
-	
-	/* Replace with your application code */
-	while (1)
-	{
+	init_keyboard();
 
+	while (1){
+		if((PIND & (1 << 2)) == 1){
+			eeprom_write_byte(eepromStart++, 0xaa);	
+		}
 	}
 }
 
