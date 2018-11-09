@@ -31,7 +31,7 @@ void addKeyToBuffer(char key){
 
 char getChar(){
 	while(inputCharsHead == inputCharsTail);	
-	char key = inputChars[inputCharsHead];
+	char key = inputChars[inputCharsHead++];
 	if(inputCharsHead >= INPUT_CHAR_SIZE){  // once you pass the buffer size, reset the index to 0
 		inputCharsHead = 0;
 	}
@@ -41,9 +41,8 @@ char getChar(){
 /* Keyboard config and functions */
 void init_keyboard(){
 	MCUCR |= (1 << ISC01);// set MCUCR to 2 to accept requests coming from INT0 on the falling edge 
-	DDRC = 0x00;
-	DDRD = 0xfb;
-	PORTD = 0x00;	
+	DDRC &= ~(1 << DDC2);
+	DDRD &= ~(1 << DDD2) | (1 << DDD5) | (1 << DDD6);
 	GICR |= (1 << INT0);
 	sei();
 }
@@ -77,10 +76,7 @@ ISR(INT0_vect)
 {
 	//eeprom_write_byte(eepromStart++, (unsigned char)bitCount);
 	//eeprom_write_byte(eepromStart++, (unsigned char)(KEYBOARD_PIN_NAME & (1 << KEYBORD_PIN_NUM)));
-	PORTD |= (1 << PORTD6);
-	_delay_ms(1000);
-	PORTD &= (0xff ^ (1 << PORTD6));
-	_delay_ms(1000);
+	PORTD ^= (1 << PORTD6);
 	if(bitCount < 11 && bitCount > 2) //intercept data bits
 	{
 		keyboardData = (keyboardData >> 1); // empty a space for the next data bit in keyboard data
@@ -92,7 +88,8 @@ ISR(INT0_vect)
 		decodeKeys(keyboardData);
 		bitCount = 11;
 	}
-	GIFR = 0xff;
+	//eeprom_write_byte(eepromStart++, (unsigned char)(DDRC));
+	//eeprom_write_byte(eepromStart++, (unsigned char)(DDRD));
 	//eeprom_write_byte(eepromStart++, (unsigned char)(SREG));
 	//eeprom_write_byte(eepromStart++, (unsigned char)(GICR));
 	//eeprom_write_byte(eepromStart++, (unsigned char)(GIFR));
@@ -111,7 +108,7 @@ int main(void)
 	init_keyboard();
 
 	while (1){
-		if((PIND & (1 << 2)) == 1){
+		if((PIND & (1 << DDD2)) == 1){
 			eeprom_write_byte(eepromStart++, 0xaa);	
 		}
 	}
