@@ -46,11 +46,12 @@ char getChar()
 /* Keyboard config and functions */
 void initKeyboard()
 {
-	MCUCR |= (1 << ISC01); // set MCUCR to 2 to accept requests coming from INT0 on the falling edge
-	DDRC &= ~(1 << DDC2);
-	DDRD &= ~(1 << DDD2) | (1 << DDD5) | (1 << DDD6);
 	GICR |= (1 << INT0);
-	sei();
+	MCUCR |= (1 << ISC01); // set MCUCR to 2 to accept requests coming from INT0 on the falling edge
+	DDRC &= ~(1 << DDC0);
+	DDRD &= ~(1 << DDD2);
+	DDRD |= (1 << DDD5) | (1 << DDD6);
+	
 }
 
 void decodeKeys(unsigned char data)
@@ -63,7 +64,9 @@ void decodeKeys(unsigned char data)
 	{
 		eeprom_write_byte(eepromStart++, data);
 	}
-
+	if(data == 0x49){
+		eeprom_write_byte(0x00, '.');
+	}
 	// switch (data)
 	// {
 	// case 0x49:
@@ -117,9 +120,9 @@ ISR(INT0_vect)
 		{
 			testCount++;
 			keyboardData = (keyboardData >> 1); // empty a space for the next data bit in keyboard data
-			if ((KEYBOARD_PIN_NAME & (1 << KEYBOARD_PIN_NUM)) >> KEYBOARD_PIN_NUM == 1)
+			if (KEYBOARD_PIN_NAME & (1 << KEYBOARD_PIN_NUM))
 			{						  //if the keyboard input is a 1, store a 1 in the empty space
-				keyboardData |= (1 << 7); // set the most significant bit in keyboardData to 1
+				keyboardData |= 0x80; // set the most significant bit in keyboardData to 1
 			}else{
 				keyboardData &= 0x7f;
 			}
@@ -155,6 +158,7 @@ void initLED()
 int main(void)
 {
 	initKeyboard();
+	sei();
 	while (1)
 	{
 		//if((PIND & (1 << PIND2)) == 1){
