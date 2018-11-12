@@ -9,7 +9,7 @@
 #include <avr/interrupt.h>
 #include <math.h>
 
-unsigned long timerOverflowHolder = 0;
+volatile unsigned long timerOverflowHolder = 0;
 
 /*
 * This array holds the value of the timer when each key is pressed.
