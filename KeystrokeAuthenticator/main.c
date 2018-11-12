@@ -16,7 +16,7 @@
 unsigned char isStarted = 0;
 unsigned char *eepromStart = 0x5;
 unsigned char keyboardData = 0;			   // the keyboard code being received
-unsigned char bitCount = 11;			   // The number of the bit coming from the keyboard
+unsigned char bitCount = 0;			   // The number of the bit coming from the keyboard
 unsigned char inputChars[INPUT_CHAR_SIZE]; // A buffer holding the input keys from the keyboard
 int inputCharsHead = 0;					   // counting the index of the next character to leave the buffer
 int inputCharsTail = 0;					   // counting the index of the next character to get into the buffer
@@ -58,7 +58,7 @@ void decodeKeys(unsigned char data)
 {
 	if (data == 0xff)
 	{
-		eeprom_write_byte(eepromStart++, 0xaa);
+		eeprom_write_byte(eepromStart++, 0xab);
 	}
 	else
 	{
@@ -109,43 +109,39 @@ void decodeKeys(unsigned char data)
 interrupt service routine for handling the keyboard input on INT0
 INT0 will be connected to the keyboard cl
 */
-unsigned char testCount = 0;
-unsigned char* testStart = 0x60;
 
-ISR(INT0_vect)
-{
-	if (isStarted)
-	{
-		if (bitCount < 11 && bitCount > 2) //intercept data bits
-		{
-			testCount++;
-			keyboardData = (keyboardData >> 1); // empty a space for the next data bit in keyboard data
-			if (KEYBOARD_PIN_NAME & (1 << KEYBOARD_PIN_NUM))
-			{						  //if the keyboard input is a 1, store a 1 in the empty space
-				keyboardData |= 0x80; // set the most significant bit in keyboardData to 1
-			}else{
-				keyboardData &= 0x7f;
+// set bitCount to 0
+ISR(INT0_vect) {
+	
+	if(isStarted) {
+		// perform the reading operations normally, expect 10 bits
+		bitCount++;
+		if(bitCount <= 8){
+			keyboardData = (keyboardData>>1);
+			// add bit to keyboard key
+			if(PINC & 0x01)
+			keyboardData |= 0x80;
+			else
+			keyboardData &= 0x7F;
+			// shift for next bit
+			} else {
+			// done with 8 bits and with parity and stop
+			if(bitCount == 10) {
+				isStarted = 0;
+				bitCount = 0;
+				
+				decodeKeys(keyboardData);
 			}
 		}
-
-		if (--bitCount == 0)
-		{
-			isStarted = 0;
-			if(inputCharOffset > 3){
-				decodeKeys(keyboardData);
-			}else{
-				inputCharOffset++;
-			}	
-			bitCount = 11;
-		}
-	}
-	else
-	{
-		if (bitCount == 11 && (KEYBOARD_PIN_NAME & (1 << KEYBOARD_PIN_NUM)) == 0)
-		{
+		} else {
+		// the start signal has arrived
+		if((PINC & 0x01) == 0) {
+			// set start signal
 			isStarted = 1;
-			bitCount--;
+			// reset data
+			keyboardData = 0;
 		}
+		// if the start signal has not arrived, don't do anything
 	}
 }
 
