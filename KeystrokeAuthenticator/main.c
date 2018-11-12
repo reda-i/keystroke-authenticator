@@ -4,23 +4,27 @@
 * Created: 2018-11-04 8:26:29 PM
 * Author : Army-O
 */
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
 #include <math.h>
+
 #define KEYBOARD_PIN_NAME PINC
 #define KEYBOARD_PIN_NUM 0
-#define INPUT_CHAR_SIZE 30
-unsigned char isStarted = 0;
-unsigned char *eepromStart = (unsigned char *)0x0;
+#define INPUT_CHAR_SIZE 30 // the size of the input chars buffer
+
+unsigned char isStarted = 0;						// the flag that indicates whether a start bit was received or not
+unsigned char *eepromStart = (unsigned char *)0x0;  // pointer used for the eeprom saves while testing
 unsigned char keyboardData = 0;						// the keyboard code being received
 unsigned char bitCount = 0;							// The number of the bit coming from the keyboard
 volatile unsigned char inputChars[INPUT_CHAR_SIZE]; // A buffer holding the input keys from the keyboard
 volatile int inputCharsHead = 0;					// counting the index of the next character to leave the buffer
 volatile int inputCharsTail = 0;					// counting the index of the next character to get into the buffer
-unsigned char offsetCount = 0;
-unsigned char nextIgnored = 0;
-unsigned char shiftPressed = 0;
+unsigned char offsetCount = 0;						// offset for the first 7 bytes sent by the keyboard on startup
+unsigned char nextIgnored = 0;						// the flag indicates having a keyboard break code to ignore
+unsigned char shiftPressed = 0;						// the flag indicates whether the user is pressing shift or not
+
 /*A function that adds a key to the buffer*/
 void addKeyToBuffer(char key)
 {
@@ -29,18 +33,9 @@ void addKeyToBuffer(char key)
 	{ // once you pass the buffer size, reset the index to 0
 		inputCharsTail = 0;
 	}
-
-	if (inputCharsTail == 10)
-	{
-		for (int i = 0; i < 10; i++)
-		{
-			eeprom_write_byte(eepromStart++, inputChars[i]);
-		}
-		inputCharsTail = 0;
-	}
 }
 
-char getChar()
+unsigned char getChar()
 {
 	while (inputCharsHead == inputCharsTail)
 		;
