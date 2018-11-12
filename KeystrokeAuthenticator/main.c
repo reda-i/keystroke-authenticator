@@ -38,7 +38,7 @@ void addKeyToBuffer(char key)
 unsigned char getChar()
 {
 	while (inputCharsHead == inputCharsTail)
-	;
+		;
 	char key = inputChars[inputCharsHead++];
 	if (inputCharsHead >= INPUT_CHAR_SIZE)
 	{ // once you pass the buffer size, reset the index to 0
@@ -60,64 +60,64 @@ void initKeyboard()
 void decodeKeys(unsigned char data)
 {
 	if (offsetCount < 7) // the first 7 bytes are sent from the keyboard on startup, so we discard
-	offsetCount++;
+		offsetCount++;
 	else if (nextIgnored == 0) // If I detect a keyboard break code, I ignore It. We only process make codes.
-	if (shiftPressed)
-	{ // In case the user pressed a shift pass a capital R or pass invalid character
-		if (data == 0x2D)
-		addKeyToBuffer('R');
+		if (shiftPressed)
+		{ // In case the user pressed a shift pass a capital R or pass invalid character
+			if (data == 0x2D)
+				addKeyToBuffer('R');
+			else
+				addKeyToBuffer('0');
+			shiftPressed = 0;
+		}
 		else
-		addKeyToBuffer('0');
-		shiftPressed = 0;
-	}
+			switch (data) // Decode only the relevant characters, and send 0 otherwise
+			{
+			case 0xF0:			 // In case I received a 0xFO that mean I am processing a break code
+				nextIgnored = 1; // since this is a break code, I ignore the next byte.
+				break;
+			case 0x12:
+				shiftPressed = 1;
+				break;
+			case 0x59:
+				shiftPressed = 1;
+				break;
+			case 0x49:
+				addKeyToBuffer('.');
+				break; // char is "."
+			case 0x2C:
+				addKeyToBuffer('t');
+				break; // char is "t"
+			case 0x43:
+				addKeyToBuffer('i');
+				break; // char is "i"
+			case 0x24:
+				addKeyToBuffer('e');
+				break; // char is "e"
+			case 0x2E:
+				addKeyToBuffer('5');
+				break; // char is "5"
+			case 0x2D:
+				addKeyToBuffer('r');
+				break; // char is "r"
+			case 0x44:
+				addKeyToBuffer('o');
+				break; // char is "o"
+			case 0x31:
+				addKeyToBuffer('n');
+				break; // char is "n"
+			case 0x1C:
+				addKeyToBuffer('a');
+				break; // char is "a"
+			case 0x4B:
+				addKeyToBuffer('l');
+				break; // char is "l"
+			default:
+				addKeyToBuffer('0');
+				break; // add null character to buffer in order to discard it and reset the trial
+			}
 	else
-	switch (data) // Decode only the relevant characters, and send 0 otherwise
-	{
-		case 0xF0:			 // In case I received a 0xFO that mean I am processing a break code
-		nextIgnored = 1; // since this is a break code, I ignore the next byte.
-		break;
-		case 0x12:
-		shiftPressed = 1;
-		break;
-		case 0x59:
-		shiftPressed = 1;
-		break;
-		case 0x49:
-		addKeyToBuffer('.');
-		break; // char is "."
-		case 0x2C:
-		addKeyToBuffer('t');
-		break; // char is "t"
-		case 0x43:
-		addKeyToBuffer('i');
-		break; // char is "i"
-		case 0x24:
-		addKeyToBuffer('e');
-		break; // char is "e"
-		case 0x2E:
-		addKeyToBuffer('5');
-		break; // char is "5"
-		case 0x2D:
-		addKeyToBuffer('r');
-		break; // char is "r"
-		case 0x44:
-		addKeyToBuffer('o');
-		break; // char is "o"
-		case 0x31:
-		addKeyToBuffer('n');
-		break; // char is "n"
-		case 0x1C:
-		addKeyToBuffer('a');
-		break; // char is "a"
-		case 0x4B:
-		addKeyToBuffer('l');
-		break; // char is "l"
-		default:
-		addKeyToBuffer('0');
-		break; // add null character to buffer in order to discard it and reset the trial
-	}
-	else
-	nextIgnored = 0;
+		nextIgnored = 0;
 }
 
 /*
@@ -138,9 +138,9 @@ ISR(INT0_vect)
 			keyboardData = (keyboardData >> 1);
 			// add bit to keyboard key
 			if (PINC & 0x01)
-			keyboardData |= 0x80;
+				keyboardData |= 0x80;
 			else
-			keyboardData &= 0x7F;
+				keyboardData &= 0x7F;
 			// shift for next bit
 		}
 		else
@@ -169,7 +169,6 @@ ISR(INT0_vect)
 	}
 }
 
-
 /*--------------------------------------------------- END OF KEYBOARD CONTROL LOGIC ------------------------------------------------------*/
 
 volatile unsigned long timerOverflowHolder = 0;
@@ -193,14 +192,15 @@ double userBVector[9];
 * Configures the 16-bit timer 1 to work in mode 0
 * Enables interrupts for overflow consideration
 */
-void configureTimer() {
-	
+void configureTimer()
+{
+
 	// set the timer to normal mode by clearing all WGM10 to WGM13
-	TCCR1A &= ~(1<<WGM10) & ~(1<<WGM11) & ~(1<<WGM12) & ~(1<<WGM13) ;
+	TCCR1A &= ~(1 << WGM10) & ~(1 << WGM11) & ~(1 << WGM12) & ~(1 << WGM13);
 
 	// enable interrupt on timer 1 overflow
 	TIMSK = (1 << TOIE1);
-	
+
 	// enable global interrupt
 	sei();
 }
@@ -209,47 +209,50 @@ void configureTimer() {
 * Stops the timer.
 * The timer needs to be restarted again by a call to startTimer.
 */
-void stopTimer() {
-	
+void stopTimer()
+{
+
 	// stop the timer by clearing CS10 and CS12
-	TCCR1B &= ~(1<<CS10) & ~(1<<CS12);
-	
+	TCCR1B &= ~(1 << CS10) & ~(1 << CS12);
 }
 
 /*
 * Resets timer and starts it from zero
 * by setting the frequency to freq
 */
-void startTimer() {
-	
+void startTimer()
+{
+
 	// clear the timer contents
 	TCNT1 = 0;
 	timerOverflowHolder = 0;
-	
+
 	// set timer clock frequency to freq and start
-	TCCR1B |= (1<<CS10);
-	TCCR1B &= ~(1<<CS11);
-	TCCR1B &= ~(1<<CS12);
-	
+	TCCR1B |= (1 << CS10);
+	TCCR1B &= ~(1 << CS11);
+	TCCR1B &= ~(1 << CS12);
 }
 
 /*
 * On overflow, increment the overflow count
 */
-ISR (TIMER1_OVF_vect) {
+ISR(TIMER1_OVF_vect)
+{
 	timerOverflowHolder++;
 }
 
 /* Calculates the euclidean distance
 * between the test vector and the stored user vector
 */
-double euclideanDistance(double testSubject[], double user[]) {
+double euclideanDistance(double testSubject[], double user[])
+{
 	double sum = 0.0;
-	
-	for( int i = 0; i < 10; i++){
+
+	for (int i = 0; i < 10; i++)
+	{
 		sum += pow((testSubject[i] - user[i]), 2.0);
 	}
-	
+
 	return sqrt(sum);
 }
 
@@ -257,33 +260,40 @@ double euclideanDistance(double testSubject[], double user[]) {
 * Pass 'A' for user A and pass 'B' for user B
 * Call this method after all five trials for a particular user are complete.
 */
-void calculateUserVector(char user) {
-	
+void calculateUserVector(char user)
+{
+
 	unsigned long differencesVector[9][5];
-	
+
 	// calculate user differences vector
-	for(int i=0; i < 9; i++){ // iterate over timestamps
-		for(int j=0; j<5;j++){ // iterate over trials
-			differencesVector[i][j] = userKeyTimestamps[i+1][j] - userKeyTimestamps[i][j]; // calculate difference
+	for (int i = 0; i < 9; i++)
+	{ // iterate over timestamps
+		for (int j = 0; j < 5; j++)
+		{																					 // iterate over trials
+			differencesVector[i][j] = userKeyTimestamps[i + 1][j] - userKeyTimestamps[i][j]; // calculate difference
 		}
 	}
-	
+
 	// average the differences and store the values
-	for(int i = 0; i<9; i++) { // iterate over differences
-		
+	for (int i = 0; i < 9; i++)
+	{ // iterate over differences
+
 		unsigned long sum = 0;
-		
-		for(int j=0; j<5; j++){ // iterate over trials
-			sum+=differencesVector[i][j];
+
+		for (int j = 0; j < 5; j++)
+		{ // iterate over trials
+			sum += differencesVector[i][j];
 		}
-		
+
 		double averageDifference = sum / 5.0;
-		
+
 		// store the average of the trials as a feature
-		if(user == 'A'){
+		if (user == 'A')
+		{
 			userAVector[i] = averageDifference;
 		}
-		else{
+		else
+		{
 			userBVector[i] = averageDifference;
 		}
 	}
