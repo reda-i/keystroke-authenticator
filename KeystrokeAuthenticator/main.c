@@ -13,6 +13,8 @@
 #define KEYBOARD_PIN_NAME PINC
 #define KEYBOARD_PIN_NUM 0
 #define INPUT_CHAR_SIZE 30 // the size of the input chars buffer
+#define USER_SWITCH 0
+#define TEST_SWITCH 1
 
 unsigned char isStarted = 0;						// the flag that indicates whether a start bit was received or not
 unsigned char *eepromStart = (unsigned char *)0x0;  // pointer used for the eeprom saves while testing
@@ -24,6 +26,7 @@ volatile int inputCharsTail = 0;					// counting the index of the next character
 unsigned char offsetCount = 0;						// offset for the first 7 bytes sent by the keyboard on startup
 unsigned char nextIgnored = 0;						// the flag indicates having a keyboard break code to ignore
 unsigned char shiftPressed = 0;						// the flag indicates whether the user is pressing shift or not
+unsigned char *password = ".tie5Ronal";
 
 /*A function that adds a key to the buffer*/
 void addKeyToBuffer(char key)
@@ -181,12 +184,13 @@ volatile unsigned long timerOverflowHolder = 0;
 * For example, userKeyTimestamps[0][0] corresponds to the timestamp for "." in trial 1.
 */
 unsigned long userKeyTimestamps[10][5];
-
+unsigned long testKeyTimestamps[10];
 /*
 * These two arrays hold the final vector for the two users.
 */
 double userAVector[9];
 double userBVector[9];
+double testVector[9];
 
 /*
 * Configures the 16-bit timer 1 to work in mode 0
@@ -292,10 +296,16 @@ void calculateUserVector(char user)
 		{
 			userAVector[i] = averageDifference;
 		}
-		else
+		else 
 		{
 			userBVector[i] = averageDifference;
 		}
+	}
+}
+
+void calculateTestVector() {
+	for (int i = 0; i < 9; i++) {
+		testVector[i] = testKeyTimestamps[i + 1] - testKeyTimestamps[i];
 	}
 }
 
@@ -307,9 +317,72 @@ void initLED()
 
 int main(void)
 {
+	initLED();
 	initKeyboard();
+	configureTimer();
 	sei();
 	while (1)
 	{
+		// Training Phase
+		// User A
+		while(PINB & (1 << USER_SWITCH));										// User A = PINB[USER_SWITCH] = 0
+		startTimer();
+		for(int i = 0; i < 5; i++) {
+			for(int j = 0; j < 10; j++) {
+				unsigned char character = getChar();							// Reading Entered Character
+				
+				if(password[j] != character) {									// Checking Character With Saved Password
+					j = -1;
+					continue;
+				}
+				
+				userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1;	// Saving Timestamps
+			}
+		}
+		stopTimer();
+		calculateUserVector('A');												// Calculating User A Vector
+		
+		// User B
+		while(!(PINB & (1 << USER_SWITCH)));									// User B = PINB[USER_SWITCH] = 1
+		startTimer();
+		for(int i = 0; i < 5; i++) {
+			for(int j = 0; j < 10; j++) {
+				unsigned char character = getChar();							// Reading Entered Character
+				
+				if(password[j] != character) {									// Checking Character With Saved Password
+					j = -1;
+					continue;
+				}
+				
+				userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1;	// Saving Timestamps
+			}
+		}
+		stopTimer();
+		calculateUserVector('B');												// Calculating User B Vector
+		
+		// Testing Phase
+		while(!(PINB & (1 << USER_SWITCH)));
+		startTimer();
+		for(int j = 0; j < 10; j++) {
+			unsigned char character = getChar();							// Reading Entered Character
+			
+			if(password[j] != character) {									// Checking Character With Saved Password
+				j = -1;
+				continue;
+			}
+			
+			testKeyTimestamps[j] = (timerOverflowHolder << 16) | TCNT1;		// Saving Timestamps
+		}
+		stopTimer();
+		calculateTestVector();
+		
+		double userAEuclidean = euclideanDistance(testVector, userAVector);
+		double userBEuclidean = euclideanDistance(testVector, userBVector);
+		
+		if(userAEuclidean < userBEuclidean) {
+			// TODO: USER A WINS
+		} else {
+			// TODO: USER B WINS
+		}
 	}
 }
