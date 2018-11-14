@@ -8,16 +8,35 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/eeprom.h>
+#define F_CPU 8000000UL
+#include <util/delay.h>
+
 #include <math.h>
 
 #define KEYBOARD_PIN_NAME PINC
 #define KEYBOARD_PIN_NUM 0
 #define INPUT_CHAR_SIZE 30 // the size of the input chars buffer
-#define USER_SWITCH 0
-#define TEST_SWITCH 1
+
+// Buttons
+#define USER_A_BUTTON 0
+#define USER_B_BUTTON 1
+#define TRAIN_BUTTON 2
+#define TEST_BUTTON 3
+
+// LEDs
+#define WARNING 5
+#define USERTYPE 6
+#define SWITCHINGSTATES 4
+#define TRAININGUSER 3
+
+// States
+#define TRAIN_MODE 0
+#define TEST_MODE 1
+#define USER_A 0
+#define USER_B 1
 
 unsigned char isStarted = 0;						// the flag that indicates whether a start bit was received or not
-unsigned char *eepromStart = (unsigned char *)0x0;  // pointer used for the eeprom saves while testing
+unsigned char *eepromStart = (unsigned char *)0x0;  // pointer used for the EEPROM saves while testing
 unsigned char keyboardData = 0;						// the keyboard code being received
 unsigned char bitCount = 0;							// The number of the bit coming from the keyboard
 volatile unsigned char inputChars[INPUT_CHAR_SIZE]; // A buffer holding the input keys from the keyboard
@@ -26,7 +45,10 @@ volatile int inputCharsTail = 0;					// counting the index of the next character
 unsigned char offsetCount = 0;						// offset for the first 7 bytes sent by the keyboard on startup
 unsigned char nextIgnored = 0;						// the flag indicates having a keyboard break code to ignore
 unsigned char shiftPressed = 0;						// the flag indicates whether the user is pressing shift or not
-unsigned char *password = ".tie5Ronal";
+volatile unsigned char targetUser = USER_A;
+volatile unsigned char programMode = TRAIN_MODE;
+char *password = ".tie5Ronal";
+uint32_t * eepromDStart = (uint32_t *)0x60;
 
 /*A function that adds a key to the buffer*/
 void addKeyToBuffer(char key)
@@ -57,7 +79,6 @@ void initKeyboard()
 	MCUCR |= (1 << ISC01); // set MCUCR to 2 to accept requests coming from INT0 on the falling edge
 	DDRC &= ~(1 << DDC0);
 	DDRD &= ~(1 << DDD2);
-	DDRD |= (1 << DDD5) | (1 << DDD6);
 }
 
 void decodeKeys(unsigned char data)
@@ -100,7 +121,7 @@ void decodeKeys(unsigned char data)
 			case 0x2E:
 				addKeyToBuffer('5');
 				break; // char is "5"
-			case 0x2D:
+			case 0x2D: // TO BE REMOVED
 				addKeyToBuffer('r');
 				break; // char is "r"
 			case 0x44:
@@ -196,7 +217,7 @@ double testVector[9];
 * Configures the 16-bit timer 1 to work in mode 0
 * Enables interrupts for overflow consideration
 */
-void configureTimer()
+void initTimer()
 {
 
 	// set the timer to normal mode by clearing all WGM10 to WGM13
@@ -296,15 +317,17 @@ void calculateUserVector(char user)
 		{
 			userAVector[i] = averageDifference;
 		}
-		else 
+		else
 		{
 			userBVector[i] = averageDifference;
 		}
 	}
 }
 
-void calculateTestVector() {
-	for (int i = 0; i < 9; i++) {
+void calculateTestVector()
+{
+	for (int i = 0; i < 9; i++)
+	{
 		testVector[i] = testKeyTimestamps[i + 1] - testKeyTimestamps[i];
 	}
 }
@@ -312,77 +335,155 @@ void calculateTestVector() {
 /* LED config and functions*/
 void initLED()
 {
-	//TODO: set output ports config for the LEDs
+	DDRD |= 0b01111000;
+}
+
+void initButtons()
+{
+	DDRA &= 0xF0;
+	PORTA |= 0x0F;
+}
+
+void flashOnce(unsigned char portNumber)
+{
+	PORTD |= (1 << portNumber);
+	_delay_ms(500);
+	PORTD &= ~(1 << portNumber);
+}
+
+
+void checkButtons()
+{
+	if (!(PINA & (1 << USER_A_BUTTON)) && targetUser != USER_A)
+	{
+		flashOnce(SWITCHINGSTATES);
+		targetUser = USER_A;
+	}
+	else if (!(PINA & (1 << USER_B_BUTTON)) && targetUser != USER_B)
+	{
+		flashOnce(SWITCHINGSTATES);
+		targetUser = USER_B;
+	}
+
+	if (!(PINA & (1 << TRAIN_BUTTON)) && programMode != TRAIN_MODE)
+	{
+		flashOnce(SWITCHINGSTATES);
+		programMode = TRAIN_MODE;
+	}
+	else if (!(PINA & (1 << TEST_BUTTON)) && programMode != TEST_BUTTON)
+	{
+		flashOnce(SWITCHINGSTATES);
+		programMode = TEST_MODE;
+	}
+}
+
+
+void takeTrainingTrials()
+{
+	for (int i = 0; i < 5; i++)
+	{
+		for (int j = 0; j < 10; j++)
+		{
+			unsigned char character = getChar(); // Reading Entered Character
+
+			if (password[j] != character)
+			{ // Checking Character With Saved Password
+				j = -1;
+				flashOnce(WARNING); // tell the user that the trial failed
+				continue;
+			}
+
+			userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1; // Saving Timestamps
+		}
+	}
 }
 
 int main(void)
 {
 	initLED();
+	initButtons();
 	initKeyboard();
-	configureTimer();
+	initTimer();
 	sei();
+	
 	while (1)
 	{
+		checkButtons();
+		
 		// Training Phase
-		// User A
-		while(PINB & (1 << USER_SWITCH));										// User A = PINB[USER_SWITCH] = 0
-		startTimer();
-		for(int i = 0; i < 5; i++) {
-			for(int j = 0; j < 10; j++) {
-				unsigned char character = getChar();							// Reading Entered Character
-				
-				if(password[j] != character) {									// Checking Character With Saved Password
-					j = -1;
-					continue;
-				}
-				
-				userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1;	// Saving Timestamps
-			}
-		}
-		stopTimer();
-		calculateUserVector('A');												// Calculating User A Vector
-		
-		// User B
-		while(!(PINB & (1 << USER_SWITCH)));									// User B = PINB[USER_SWITCH] = 1
-		startTimer();
-		for(int i = 0; i < 5; i++) {
-			for(int j = 0; j < 10; j++) {
-				unsigned char character = getChar();							// Reading Entered Character
-				
-				if(password[j] != character) {									// Checking Character With Saved Password
-					j = -1;
-					continue;
-				}
-				
-				userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1;	// Saving Timestamps
-			}
-		}
-		stopTimer();
-		calculateUserVector('B');												// Calculating User B Vector
-		
-		// Testing Phase
-		while(!(PINB & (1 << USER_SWITCH)));
-		startTimer();
-		for(int j = 0; j < 10; j++) {
-			unsigned char character = getChar();							// Reading Entered Character
+		if (programMode == TRAIN_MODE)
+		{
 			
-			if(password[j] != character) {									// Checking Character With Saved Password
-				j = -1;
-				continue;
+			if (targetUser == USER_A)
+			{
+				
+				// User A
+				startTimer();
+
+				takeTrainingTrials();
+				
+				stopTimer();
+				calculateUserVector('A'); // Calculating User A Vector
+				flashOnce(TRAININGUSER);
+			}
+			else
+			{
+				// User B
+				startTimer();
+				takeTrainingTrials();
+	
+				stopTimer();
+				calculateUserVector('B'); // Calculating User B Vector
+
+				flashOnce(TRAININGUSER);
+					_delay_ms(250);
+				flashOnce(TRAININGUSER);
 			}
 			
-			testKeyTimestamps[j] = (timerOverflowHolder << 16) | TCNT1;		// Saving Timestamps
+			PORTD |= (1 << SWITCHINGSTATES);
+			_delay_ms(10000);
+			PORTD &= ~(1 << SWITCHINGSTATES);
 		}
-		stopTimer();
-		calculateTestVector();
-		
-		double userAEuclidean = euclideanDistance(testVector, userAVector);
-		double userBEuclidean = euclideanDistance(testVector, userBVector);
-		
-		if(userAEuclidean < userBEuclidean) {
-			// TODO: USER A WINS
-		} else {
-			// TODO: USER B WINS
+		else
+		{
+
+			// Testing Phase
+			startTimer();
+			for (int j = 0; j < 10; j++)
+			{
+				unsigned char character = getChar(); // Reading Entered Character
+
+				if (password[j] != character)
+				{ // Checking Character With Saved Password
+					j = -1;
+					flashOnce(WARNING);
+					continue;
+				}
+
+				testKeyTimestamps[j] = (timerOverflowHolder << 16) | TCNT1; // Saving Timestamps
+			}
+			stopTimer();
+			calculateTestVector();
+
+			double userAEuclidean = euclideanDistance(testVector, userAVector);
+			double userBEuclidean = euclideanDistance(testVector, userBVector);
+			eeprom_write_dword(eepromDStart, userAEuclidean);
+			eepromDStart += 8;
+			eeprom_write_dword(eepromDStart, userBEuclidean);
+			if (userAEuclidean < userBEuclidean)
+			{
+				flashOnce(USERTYPE);
+			}
+			else
+			{
+				flashOnce(USERTYPE);
+					_delay_ms(250);
+				flashOnce(USERTYPE);
+			}
+			
+			PORTD |= (1 << SWITCHINGSTATES);
+			_delay_ms(5000);
+			PORTD &= ~(1 << SWITCHINGSTATES);
 		}
 	}
 }
