@@ -382,6 +382,7 @@ void takeTrainingTrials()
 {
 	for (int i = 0; i < 5; i++)
 	{
+		startTimer();
 		for (int j = 0; j < 10; j++)
 		{
 			unsigned char character = getChar(); // Reading Entered Character
@@ -395,6 +396,7 @@ void takeTrainingTrials()
 
 			userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1; // Saving Timestamps
 		}
+		stopTimer();
 	}
 }
 
@@ -418,21 +420,16 @@ int main(void)
 			{
 				
 				// User A
-				startTimer();
-
 				takeTrainingTrials();
-				
-				stopTimer();
+
 				calculateUserVector('A'); // Calculating User A Vector
 				flashOnce(TRAININGUSER);
 			}
 			else
 			{
 				// User B
-				startTimer();
 				takeTrainingTrials();
-	
-				stopTimer();
+
 				calculateUserVector('B'); // Calculating User B Vector
 
 				flashOnce(TRAININGUSER);
