@@ -394,7 +394,7 @@ void takeTrainingTrials()
 				continue;
 			}
 
-			userKeyTimestamps[i][j] = (timerOverflowHolder << 16) | TCNT1; // Saving Timestamps
+			userKeyTimestamps[j][i] = (timerOverflowHolder << 16) | TCNT1; // Saving Timestamps
 		}
 		stopTimer();
 	}
