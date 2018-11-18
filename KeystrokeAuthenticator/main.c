@@ -225,9 +225,6 @@ void initTimer()
 
 	// enable interrupt on timer 1 overflow
 	TIMSK = (1 << TOIE1);
-
-	// enable global interrupt
-	sei();
 }
 
 /*
