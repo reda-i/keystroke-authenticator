@@ -204,8 +204,8 @@ volatile unsigned long timerOverflowHolder = 0;
 * The second dimension of the array is for the 5 trials.
 * For example, userKeyTimestamps[0][0] corresponds to the timestamp for "." in trial 1.
 */
-unsigned long userKeyTimestamps[10][5];
-unsigned long testKeyTimestamps[10];
+volatile unsigned long userKeyTimestamps[10][5];
+volatile unsigned long testKeyTimestamps[10];
 /*
 * These two arrays hold the final vector for the two users.
 */
@@ -273,7 +273,7 @@ double euclideanDistance(double testSubject[], double user[])
 {
 	double sum = 0.0;
 
-	for (int i = 0; i < 10; i++)
+	for (int i = 0; i < 9; i++)
 	{
 		sum += pow((testSubject[i] - user[i]), 2.0);
 	}
@@ -464,9 +464,6 @@ int main(void)
 
 			double userAEuclidean = euclideanDistance(testVector, userAVector);
 			double userBEuclidean = euclideanDistance(testVector, userBVector);
-			eeprom_write_dword(eepromDStart, userAEuclidean);
-			eepromDStart += 8;
-			eeprom_write_dword(eepromDStart, userBEuclidean);
 			if (userAEuclidean < userBEuclidean)
 			{
 				flashOnce(USERTYPE);
